@@ -573,9 +573,10 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 48;
-				DEVELOPMENT_TEAM = 8S7348QV8Q;
+				DEVELOPMENT_TEAM = N8SF3PK8CV;
 				HEADER_SEARCH_PATHS = "";
 				INFOPLIST_FILE = ModernKey/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -585,7 +586,7 @@
 				OTHER_LDFLAGS = (
 					"-lc++\n-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.tuyenmai.openkey;
+				PRODUCT_BUNDLE_IDENTIFIER = com.truepilot.openkey;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 			};
@@ -599,9 +600,10 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 48;
-				DEVELOPMENT_TEAM = 8S7348QV8Q;
+				DEVELOPMENT_TEAM = N8SF3PK8CV;
 				HEADER_SEARCH_PATHS = "";
 				INFOPLIST_FILE = ModernKey/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -611,7 +613,7 @@
 				OTHER_LDFLAGS = (
 					"-lc++\n-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.tuyenmai.openkey;
+				PRODUCT_BUNDLE_IDENTIFIER = com.truepilot.openkey;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 			};

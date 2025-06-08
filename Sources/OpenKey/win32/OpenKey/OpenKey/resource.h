@@ -63,6 +63,7 @@
 #define IDD_DIALOG_OLD                  148
 #define IDD_DIALOG_TAB_INFO             149
 #define IDS_STRING_OTHER_LANGUAGES		150
+#define IDD_DIALOG_TAB_EXCLUSION        151
 #define IDC_COMBO1                      1000
 #define IDC_COMBO_INPUT_TYPE            1000
 #define IDC_CHECK1                      1001
@@ -143,9 +144,10 @@
 #define IDC_SYSLINK_AUTHOR_EMAIL        1030
 #define IDC_SYSLINK_NEW_VERSION         1031
 #define IDC_SYSLINK_FANPAGE             1032
-#define IDC_STATIC_APP_SUB_TITLE5       1033
-#define IDC_STATIC_APP_SUB_TITLE6       1034
-#define IDC_SPLIT1                      1035
+#define IDC_SYSLINK_FORKER_EMAIL        1033
+#define IDC_STATIC_APP_SUB_TITLE5       1034
+#define IDC_STATIC_APP_SUB_TITLE6       1035
+#define IDC_SPLIT1                      1036
 #define IDC_LIST3                       1038
 #define IDC_LIST_MACRO_DATA             1038
 #define IDC_BUTTON_CONVERT_SWITCH       1039
@@ -184,14 +186,31 @@
 #define IDC_CHECK_OTHER_LANGUAGES       1068
 #define IDC_STATIC                      -1
 
+// Exclusion tab controls
+#define IDC_CHECK_EXCLUSION_ENABLED     1069
+#define IDC_LIST_EXCLUDED_APPS          1070
+#define IDC_BUTTON_ADD_APP              1071
+#define IDC_BUTTON_REMOVE_APP           1072
+#define IDC_BUTTON_ADD_MANUAL           1073
+
+// Exclusion strings
+#define IDS_STRING_EXCLUSION_ENABLED    152
+#define IDS_STRING_EXCLUSION_TAB        153
+#define IDS_STRING_ADD_APP              154
+#define IDS_STRING_REMOVE_APP           155
+#define IDS_STRING_ADD_MANUAL           156
+
+// Simple input dialog
+#define IDD_DIALOG_INPUT                157
+#define IDC_EDIT_INPUT                  1074
+
 // Next default values for new objects
-// 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        149
+#define _APS_NEXT_RESOURCE_VALUE        158
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         1052
+#define _APS_NEXT_CONTROL_VALUE         1075
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

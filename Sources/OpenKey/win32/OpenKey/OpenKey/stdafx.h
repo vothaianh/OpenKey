@@ -86,3 +86,7 @@ extern int vRememberCode;
 extern int vOtherLanguage;
 extern int vTempOffOpenKey;
 extern int vFixChromiumBrowser;
+
+// Exclusion feature variables
+extern int vExclusionEnabled;
+extern vector<string> vExcludedApps;

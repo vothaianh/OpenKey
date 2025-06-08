@@ -48,6 +48,7 @@ extern int vPerformLayoutCompat;
     __weak IBOutlet NSButton *CustomBeepSound;
     NSArray* tabviews, *tabbuttons;
     NSRect tabViewRect;
+    NSMutableArray* excludedApps;
 }
 
 - (void)viewDidLoad {
@@ -60,12 +61,12 @@ extern int vPerformLayoutCompat;
     self.retryButton.enabled = NO;
  
     NSRect parentRect = self.viewParent.frame;
-    parentRect.size.height = 490;
+    parentRect.size.height = 580;
     self.viewParent.frame = parentRect;
     
     //set correct tabgroup
-    tabviews = [NSArray arrayWithObjects:self.tabviewPrimary, self.tabviewMacro, self.tabviewSystem, self.tabviewInfo, nil];
-    tabbuttons = [NSArray arrayWithObjects:self.tabbuttonPrimary, self.tabbuttonMacro, self.tabbuttonSystem, self.tabbuttonInfo, nil];
+    tabviews = [NSArray arrayWithObjects:self.tabviewPrimary, self.tabviewMacro, self.tabviewSystem, self.tabviewExclusion, self.tabviewInfo, nil];
+    tabbuttons = [NSArray arrayWithObjects:self.tabbuttonPrimary, self.tabbuttonMacro, self.tabbuttonSystem, self.tabbuttonExclusion, self.tabbuttonInfo, nil];
     tabViewRect = self.tabviewPrimary.frame;
     for (NSBox* b in tabviews) {
         b.frame = tabViewRect;
@@ -85,6 +86,9 @@ extern int vPerformLayoutCompat;
     
     [self initKey];
     
+    // Initialize excluded apps
+    [self initExcludedApps];
+    
     [self fillData];
     
     // set version info
@@ -98,6 +102,17 @@ extern int vPerformLayoutCompat;
     [super viewDidAppear];
     NSString* str = @"OpenKey %@ - Bộ gõ Tiếng Việt";
     self.view.window.title = [NSString stringWithFormat:str, [[NSBundle mainBundle] objectForInfoDictionaryKey: @"CFBundleShortVersionString"]];
+    
+    // Setup table view after view appears to ensure outlets are connected
+    [self setupExclusionTableView];
+}
+
+- (void)setupExclusionTableView {
+    if (self.excludedAppsTableView) {
+        self.excludedAppsTableView.dataSource = self;
+        self.excludedAppsTableView.delegate = self;
+        [self.excludedAppsTableView reloadData];
+    }
 }
 
 - (void)viewWillAppear {
@@ -463,6 +478,12 @@ extern int vPerformLayoutCompat;
     value = [[NSUserDefaults standardUserDefaults] integerForKey:@"vPerformLayoutCompat"];
     self.PerformLayoutCompat.state = value ? NSControlStateValueOn : NSControlStateValueOff;
     
+    // Load exclusion settings
+    value = [[NSUserDefaults standardUserDefaults] integerForKey:@"ExclusionEnabled"];
+    if (self.enableExclusionButton) {
+        self.enableExclusionButton.state = value ? NSControlStateValueOn : NSControlStateValueOff;
+    }
+    
     CustomSwitchControl.state = (vSwitchKeyStatus & 0x100) ? NSControlStateValueOn : NSControlStateValueOff;
     CustomSwitchOption.state = (vSwitchKeyStatus & 0x200) ? NSControlStateValueOn : NSControlStateValueOff;
     CustomSwitchCommand.state = (vSwitchKeyStatus & 0x400) ? NSControlStateValueOn : NSControlStateValueOff;
@@ -505,8 +526,12 @@ extern int vPerformLayoutCompat;
     [[NSWorkspace sharedWorkspace] openURL: [NSURL URLWithString:@"mailto:maivutuyen.91@gmail.com"]];
 }
 
+- (IBAction)onForkerEmailLink:(id)sender {
+    [[NSWorkspace sharedWorkspace] openURL: [NSURL URLWithString:@"mailto:vothaianh@gmail.com"]];
+}
+
 - (IBAction)onSourceCode:(id)sender {
-  [[NSWorkspace sharedWorkspace] openURL: [NSURL URLWithString:@"https://github.com/tuyenvm/OpenKey"]];
+  [[NSWorkspace sharedWorkspace] openURL: [NSURL URLWithString:@"https://github.com/vothaianh/OpenKey"]];
 }
 
 - (IBAction)onCheckNewVersionButton:(id)sender {
@@ -517,6 +542,274 @@ extern int vPerformLayoutCompat;
         self.CheckNewVersionButton.enabled = true;
         self.CheckNewVersionButton.title = @"Kiểm tra bản mới...";
     }];
+}
+
+#pragma mark - App Exclusion Methods
+
+- (void)initExcludedApps {
+    NSArray *savedApps = [[NSUserDefaults standardUserDefaults] arrayForKey:@"ExcludedApps"];
+    if (savedApps) {
+        excludedApps = [savedApps mutableCopy];
+    } else {
+        excludedApps = [[NSMutableArray alloc] init];
+    }
+    
+    // Load exclusion enabled state
+    NSInteger exclusionEnabled = [[NSUserDefaults standardUserDefaults] integerForKey:@"ExclusionEnabled"];
+    if (self.enableExclusionButton) {
+        self.enableExclusionButton.state = exclusionEnabled ? NSControlStateValueOn : NSControlStateValueOff;
+    }
+    
+    // Initially disable remove button
+    if (self.removeAppButton) {
+        self.removeAppButton.enabled = NO;
+    }
+}
+
+- (IBAction)onEnableExclusion:(NSButton *)sender {
+    NSInteger val = [self setCustomValue:sender keyToSet:@"ExclusionEnabled"];
+    // Update the global exclusion state in OpenKey engine
+    [self updateExclusionState];
+}
+
+- (IBAction)onAddApp:(NSButton *)sender {
+    NSAlert *alert = [[NSAlert alloc] init];
+    [alert setMessageText:@"Thêm ứng dụng loại trừ"];
+    [alert setInformativeText:@"Chọn cách thêm ứng dụng vào danh sách loại trừ"];
+    [alert addButtonWithTitle:@"Chọn App"];
+    [alert addButtonWithTitle:@"Nhập Bundle ID"];
+    [alert addButtonWithTitle:@"Hủy"];
+    
+    [alert beginSheetModalForWindow:self.view.window completionHandler:^(NSModalResponse returnCode) {
+        if (returnCode == NSAlertFirstButtonReturn) {
+            // Chọn App
+            [self showAppPicker];
+        } else if (returnCode == NSAlertSecondButtonReturn) {
+            // Nhập Bundle ID
+            [self showBundleIdInput];
+        }
+    }];
+}
+
+- (void)showAppPicker {
+    NSOpenPanel *openPanel = [NSOpenPanel openPanel];
+    openPanel.canChooseFiles = YES;
+    openPanel.canChooseDirectories = NO;
+    openPanel.allowsMultipleSelection = NO;
+    openPanel.allowedFileTypes = @[@"app"];
+    openPanel.directoryURL = [NSURL fileURLWithPath:@"/Applications"];
+    
+    [openPanel beginSheetModalForWindow:self.view.window completionHandler:^(NSModalResponse result) {
+        if (result == NSModalResponseOK) {
+            NSURL *selectedURL = openPanel.URLs.firstObject;
+            NSBundle *appBundle = [NSBundle bundleWithURL:selectedURL];
+            NSString *bundleIdentifier = appBundle.bundleIdentifier;
+            
+            if (!excludedApps) {
+                excludedApps = [[NSMutableArray alloc] init];
+            }
+            
+            // Clean bundle identifier
+            bundleIdentifier = [bundleIdentifier stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            
+            if (bundleIdentifier && bundleIdentifier.length > 0 && ![excludedApps containsObject:bundleIdentifier]) {
+                [excludedApps addObject:bundleIdentifier];
+                [self saveExcludedApps];
+                [self.excludedAppsTableView reloadData];
+                [self updateExclusionState];
+            } else if (!bundleIdentifier || bundleIdentifier.length == 0) {
+                NSAlert *alert = [[NSAlert alloc] init];
+                [alert setMessageText:@"Không thể lấy Bundle Identifier"];
+                [alert setInformativeText:@"Ứng dụng được chọn không có Bundle Identifier hợp lệ"];
+                [alert addButtonWithTitle:@"OK"];
+                [alert beginSheetModalForWindow:self.view.window completionHandler:nil];
+            } else {
+                NSAlert *alert = [[NSAlert alloc] init];
+                [alert setMessageText:@"Ứng dụng đã tồn tại"];
+                [alert setInformativeText:[NSString stringWithFormat:@"'%@' đã có trong danh sách", bundleIdentifier]];
+                [alert addButtonWithTitle:@"OK"];
+                [alert beginSheetModalForWindow:self.view.window completionHandler:nil];
+            }
+        }
+    }];
+}
+
+- (void)showBundleIdInput {
+    NSAlert *alert = [[NSAlert alloc] init];
+    [alert setMessageText:@"Nhập Bundle Identifier"];
+    [alert setInformativeText:@"Nhập Bundle ID của ứng dụng. Có thể sử dụng wildcard với .* \nVí dụ: com.apple.Safari hoặc com.todesktop.*"];
+    [alert addButtonWithTitle:@"Thêm"];
+    [alert addButtonWithTitle:@"Hủy"];
+    
+    NSTextField *input = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 300, 24)];
+    input.placeholderString = @"com.example.app hoặc com.example.*";
+    [alert setAccessoryView:input];
+    
+    [alert beginSheetModalForWindow:self.view.window completionHandler:^(NSModalResponse returnCode) {
+        if (returnCode == NSAlertFirstButtonReturn) {
+            NSString *bundleId = [input.stringValue stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            
+            if (bundleId.length == 0) {
+                NSAlert *errorAlert = [[NSAlert alloc] init];
+                [errorAlert setMessageText:@"Bundle Identifier không được để trống"];
+                [errorAlert addButtonWithTitle:@"OK"];
+                [errorAlert beginSheetModalForWindow:self.view.window completionHandler:nil];
+                return;
+            }
+            
+            if ([excludedApps containsObject:bundleId]) {
+                NSAlert *errorAlert = [[NSAlert alloc] init];
+                [errorAlert setMessageText:@"Bundle Identifier đã tồn tại"];
+                [errorAlert setInformativeText:[NSString stringWithFormat:@"'%@' đã có trong danh sách", bundleId]];
+                [errorAlert addButtonWithTitle:@"OK"];
+                [errorAlert beginSheetModalForWindow:self.view.window completionHandler:nil];
+                return;
+            }
+            
+            [excludedApps addObject:bundleId];
+            [self saveExcludedApps];
+            [self.excludedAppsTableView reloadData];
+            [self updateExclusionState];
+        }
+    }];
+}
+
+
+
+- (IBAction)onRemoveApp:(NSButton *)sender {
+    NSInteger selectedRow = self.excludedAppsTableView.selectedRow;
+    if (selectedRow >= 0 && selectedRow < excludedApps.count) {
+        [excludedApps removeObjectAtIndex:selectedRow];
+        [self saveExcludedApps];
+        [self.excludedAppsTableView reloadData];
+        [self updateExclusionState];
+    }
+}
+
+- (void)saveExcludedApps {
+    [[NSUserDefaults standardUserDefaults] setObject:excludedApps forKey:@"ExcludedApps"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
+- (void)updateExclusionState {
+    // This method will be called to update the OpenKey engine with the current exclusion list
+    // Since we're checking exclusion in the OpenKeyCallback function using NSUserDefaults,
+    // we don't need to do anything special here - the settings are automatically picked up
+    NSLog(@"Exclusion state updated. Enabled: %ld, Apps count: %lu", 
+          (long)[[NSUserDefaults standardUserDefaults] integerForKey:@"ExclusionEnabled"],
+          (unsigned long)excludedApps.count);
+}
+
+- (NSString *)getAppNameFromBundleIdentifier:(NSString *)bundleIdentifier {
+    // Handle wildcard patterns
+    if ([bundleIdentifier hasSuffix:@".*"]) {
+        NSString *prefix = [bundleIdentifier substringToIndex:bundleIdentifier.length - 2];
+        NSArray *components = [prefix componentsSeparatedByString:@"."];
+        if (components.count >= 2) {
+            // Try to get a nice name from the bundle ID
+            NSString *lastComponent = [components lastObject];
+            NSString *capitalizedName = [lastComponent stringByReplacingCharactersInRange:NSMakeRange(0,1) 
+                                                                               withString:[[lastComponent substringToIndex:1] uppercaseString]];
+            return [NSString stringWithFormat:@"%@ (tất cả)", capitalizedName];
+        }
+        return [NSString stringWithFormat:@"%@ (tất cả)", prefix];
+    }
+    
+    NSWorkspace *workspace = [NSWorkspace sharedWorkspace];
+    NSString *appPath = [workspace absolutePathForAppBundleWithIdentifier:bundleIdentifier];
+    if (appPath) {
+        NSBundle *appBundle = [NSBundle bundleWithPath:appPath];
+        NSString *appName = [appBundle objectForInfoDictionaryKey:@"CFBundleDisplayName"];
+        if (!appName) {
+            appName = [appBundle objectForInfoDictionaryKey:@"CFBundleName"];
+        }
+        if (!appName) {
+            appName = [[appPath lastPathComponent] stringByDeletingPathExtension];
+        }
+        return appName;
+    }
+    return bundleIdentifier;
+}
+
+#pragma mark - NSTableViewDataSource
+
+- (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView {
+    if (tableView == self.excludedAppsTableView) {
+        // Ensure excludedApps is initialized
+        if (!excludedApps) {
+            [self initExcludedApps];
+        }
+        return excludedApps.count;
+    }
+    return 0;
+}
+
+#pragma mark - NSTableViewDelegate
+
+- (NSView *)tableView:(NSTableView *)tableView viewForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {
+    NSLog(@"DEBUG: viewForTableColumn called - tableView: %@, column: %@, row: %ld", tableView, tableColumn.identifier, (long)row);
+    
+    if (tableView == self.excludedAppsTableView) {
+        // Ensure excludedApps is initialized
+        if (!excludedApps) {
+            [self initExcludedApps];
+        }
+        
+        NSLog(@"DEBUG: excludedApps count: %lu", (unsigned long)excludedApps.count);
+        
+        if (row < excludedApps.count) {
+            NSString *bundleIdentifier = excludedApps[row];
+            NSString *appName = [self getAppNameFromBundleIdentifier:bundleIdentifier];
+            
+            NSLog(@"DEBUG: Row %ld - Bundle: %@, App: %@", (long)row, bundleIdentifier, appName);
+            NSLog(@"DEBUG: Column identifier: %@", tableColumn.identifier);
+            
+            if ([tableColumn.identifier isEqualToString:@"ExC-Col-Name"]) {
+                NSTableCellView *cellView = [tableView makeViewWithIdentifier:@"AppNameCell" owner:self];
+                NSLog(@"DEBUG: Created AppNameCell: %@", cellView);
+                if (cellView) {
+                    cellView.textField.stringValue = appName;
+                    NSLog(@"DEBUG: Set app name: %@", appName);
+                } else {
+                    NSLog(@"DEBUG: Failed to create AppNameCell");
+                }
+                return cellView;
+            } else if ([tableColumn.identifier isEqualToString:@"ExC-Col-Bundle"]) {
+                NSTableCellView *cellView = [tableView makeViewWithIdentifier:@"BundleIdCell" owner:self];
+                NSLog(@"DEBUG: Created BundleIdCell: %@", cellView);
+                if (cellView) {
+                    cellView.textField.stringValue = bundleIdentifier;
+                    
+                    // Highlight wildcard patterns in blue
+                    if ([bundleIdentifier hasSuffix:@".*"]) {
+                        cellView.textField.textColor = [NSColor systemBlueColor];
+                    } else {
+                        cellView.textField.textColor = [NSColor controlTextColor];
+                    }
+                    NSLog(@"DEBUG: Set bundle ID: %@", bundleIdentifier);
+                } else {
+                    NSLog(@"DEBUG: Failed to create BundleIdCell");
+                }
+                
+                return cellView;
+            } else {
+                NSLog(@"DEBUG: Unknown column identifier: %@", tableColumn.identifier);
+            }
+        } else {
+            NSLog(@"DEBUG: Row %ld is out of bounds (count: %lu)", (long)row, (unsigned long)excludedApps.count);
+        }
+    } else {
+        NSLog(@"DEBUG: Not excludedAppsTableView");
+    }
+    
+    NSLog(@"DEBUG: Returning nil");
+    return nil;
+}
+
+- (void)tableViewSelectionDidChange:(NSNotification *)notification {
+    if (notification.object == self.excludedAppsTableView) {
+        self.removeAppButton.enabled = (self.excludedAppsTableView.selectedRow >= 0);
+    }
 }
 
 @end

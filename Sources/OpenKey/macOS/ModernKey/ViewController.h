@@ -9,15 +9,17 @@
 #import <Cocoa/Cocoa.h>
 #import "MyTextField.h"
 
-@interface ViewController : NSViewController<MyTextFieldDelegate>
+@interface ViewController : NSViewController<MyTextFieldDelegate, NSTableViewDataSource, NSTableViewDelegate>
 @property (strong) IBOutlet NSView *viewParent;
 @property (weak) IBOutlet NSButton *tabbuttonPrimary;
 @property (weak) IBOutlet NSButton *tabbuttonMacro;
 @property (weak) IBOutlet NSButton *tabbuttonSystem;
+@property (weak) IBOutlet NSButton *tabbuttonExclusion;
 @property (weak) IBOutlet NSButton *tabbuttonInfo;
 @property (weak) IBOutlet NSBox *tabviewPrimary;
 @property (weak) IBOutlet NSBox *tabviewMacro;
 @property (weak) IBOutlet NSBox *tabviewSystem;
+@property (weak) IBOutlet NSBox *tabviewExclusion;
 @property (weak) IBOutlet NSBox *tabviewInfo;
 
 @property (weak) IBOutlet NSPopUpButton *popupInputType;
@@ -70,6 +72,13 @@
 
 @property (weak) IBOutlet NSImageView *cursorImage;
 
+// App Exclusion Tab Properties
+@property (weak) IBOutlet NSTableView *excludedAppsTableView;
+@property (weak) IBOutlet NSButton *addAppButton;
+@property (weak) IBOutlet NSButton *removeAppButton;
+@property (weak) IBOutlet NSButton *enableExclusionButton;
+
 -(void)fillData;
+- (IBAction)onForkerEmailLink:(id)sender;
 @end
 

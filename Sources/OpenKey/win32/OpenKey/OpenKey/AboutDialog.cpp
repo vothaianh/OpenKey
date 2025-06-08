@@ -50,9 +50,9 @@ INT_PTR AboutDialog::eventProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 		case NM_RETURN: {
 			PNMLINK link = (PNMLINK)lParam;
 			if (link->hdr.idFrom == IDC_SYSLINK_HOME_PAGE)
-				ShellExecute(NULL, _T("open"), _T("https://github.com/tuyenvm/OpenKey"), NULL, NULL, SW_SHOWNORMAL);
+				ShellExecute(NULL, _T("open"), _T("https://github.com/vothaianh/OpenKey"), NULL, NULL, SW_SHOWNORMAL);
 			else if (link->hdr.idFrom == IDC_SYSLINK_NEW_VERSION)
-				ShellExecute(NULL, _T("open"), _T("https://github.com/tuyenvm/OpenKey/releases"), NULL, NULL, SW_SHOWNORMAL);
+				ShellExecute(NULL, _T("open"), _T("https://github.com/vothaianh/OpenKey/releases"), NULL, NULL, SW_SHOWNORMAL);
 			else if (link->hdr.idFrom == IDC_SYSLINK_FANPAGE)
 				ShellExecute(NULL, _T("open"), _T("https://www.facebook.com/OpenKeyVN"), NULL, NULL, SW_SHOWNORMAL);
 		}

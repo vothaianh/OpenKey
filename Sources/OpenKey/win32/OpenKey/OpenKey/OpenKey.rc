@@ -263,7 +263,7 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,259,247,50,14
 END
 
-IDD_DIALOG_TAB_INFO DIALOGEX 0, 0, 287, 119
+IDD_DIALOG_TAB_INFO DIALOGEX 0, 0, 287, 135
 STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD
 EXSTYLE WS_EX_TRANSPARENT
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
@@ -280,8 +280,36 @@ BEGIN
     LTEXT           "Mai Vũ Tuyên © 2019 - ",IDC_STATIC_APP_SUB_TITLE6,39,94,78,8
     CONTROL         "<a>maivutuyen.91@gmail.com</a>",IDC_SYSLINK_AUTHOR_EMAIL,
                     "SysLink",WS_TABSTOP,117,94,101,10
+    LTEXT           "Võ Thái Anh (forker) - ",IDC_STATIC,39,106,78,8
+    CONTROL         "<a>vothaianh@gmail.com</a>",IDC_SYSLINK_FORKER_EMAIL,
+                    "SysLink",WS_TABSTOP,117,106,101,10
     LTEXT           "Phien ban",IDC_STATIC_APP_VERSION_INFO,39,50,227,8
-    PUSHBUTTON      "Mã nguồn...",IDC_BUTTON_GO_SOURCE_CODE,226,91,50,14
+    PUSHBUTTON      "Mã nguồn...",IDC_BUTTON_GO_SOURCE_CODE,226,118,50,14
+END
+
+IDD_DIALOG_TAB_EXCLUSION DIALOGEX 0, 0, 344, 177
+STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD
+EXSTYLE WS_EX_TRANSPARENT
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "Bật tính năng loại trừ ứng dụng",IDC_CHECK_EXCLUSION_ENABLED,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,12,140,10
+    LTEXT           "Danh sách ứng dụng bị loại trừ:",IDC_STATIC,7,30,120,8
+    CONTROL         "",IDC_LIST_EXCLUDED_APPS,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,7,42,330,100
+    PUSHBUTTON      "Thêm ứng dụng...",IDC_BUTTON_ADD_APP,7,150,80,20
+    PUSHBUTTON      "Thêm thủ công...",IDC_BUTTON_ADD_MANUAL,95,150,80,20
+    PUSHBUTTON      "Xóa",IDC_BUTTON_REMOVE_APP,183,150,50,20
+END
+
+IDD_DIALOG_INPUT DIALOGEX 0, 0, 300, 120
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Thêm ứng dụng thủ công"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LTEXT           "Nhập tên file exe hoặc pattern (ví dụ: notepad.exe hoặc com.todesktop.*):",IDC_STATIC,7,7,286,16
+    EDITTEXT        IDC_EDIT_INPUT,7,30,286,14,ES_AUTOHSCROLL
+    DEFPUSHBUTTON   "OK",IDOK,189,99,50,14
+    PUSHBUTTON      "Hủy",IDCANCEL,243,99,50,14
 END
 
 
@@ -362,6 +390,22 @@ BEGIN
         LEFTMARGIN, 7
         RIGHTMARGIN, 280
         TOPMARGIN, 9
+        BOTTOMMARGIN, 112
+    END
+
+    IDD_DIALOG_TAB_EXCLUSION, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 337
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 167
+    END
+
+    IDD_DIALOG_INPUT, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 292
+        TOPMARGIN, 7
         BOTTOMMARGIN, 112
     END
 END
@@ -524,6 +568,16 @@ END
 STRINGTABLE
 BEGIN
     IDS_STRING_FIX_CHROMIUM "Sửa lỗi bị đúp từ trên các trình duyệt Chromium bao gồm Google Chrome, Brave, Microsoft Edge. Tính năng này đang được thử nghiệm. Cần bật tính năng ""Sửa lỗi gợi ý"" để hỗ trợ tính năng này."
+END
+
+STRINGTABLE
+BEGIN
+    IDS_STRING_EXCLUSION_ENABLED 
+                            "Bật tính năng loại trừ ứng dụng - OpenKey sẽ tự động tắt gõ Tiếng Việt khi các ứng dụng này đang hoạt động"
+    IDS_STRING_EXCLUSION_TAB "Loại trừ"
+    IDS_STRING_ADD_APP      "Thêm ứng dụng từ danh sách"
+    IDS_STRING_REMOVE_APP   "Xóa ứng dụng đã chọn khỏi danh sách loại trừ"
+    IDS_STRING_ADD_MANUAL   "Thêm thủ công bằng cách nhập tên file exe hoặc bundle identifier"
 END
 
 #endif    // English (United States) resources

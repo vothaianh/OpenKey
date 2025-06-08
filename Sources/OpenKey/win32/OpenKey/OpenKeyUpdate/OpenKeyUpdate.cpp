@@ -102,7 +102,7 @@ DWORD WINAPI UpdateThreadFunction(LPVOID lpParam) {
 	
 	//download zip file
 	WCHAR updateUrl[MAX_PATH];
-	wsprintf(updateUrl, TEXT("https://github.com/tuyenvm/OpenKey/releases/download/%s/OpenKey%s-Windows.zip"),
+	wsprintf(updateUrl, TEXT("https://github.com/vothaianh/OpenKey/releases/download/%s/OpenKey%s-Windows.zip"),
 		versionName.c_str(),
 		versionName.c_str());
 	wsprintf(path, TEXT("%s\\_OpenKeyUpdate.zip"), currentDir);
