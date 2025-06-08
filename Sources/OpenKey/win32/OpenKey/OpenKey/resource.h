@@ -204,13 +204,26 @@
 #define IDD_DIALOG_INPUT                157
 #define IDC_EDIT_INPUT                  1074
 
+// App picker dialog
+#define IDD_DIALOG_APP_PICKER           158
+#define IDC_EDIT_SEARCH                 1078
+#define IDC_LIST_RECENT_APPS            1079
+#define IDC_BUTTON_BROWSE               1080
+#define IDC_STATIC_SEARCH_LABEL         1081
+#define IDC_STATIC_RECENT_LABEL         1082
+
+// Additional controls for wider layout
+#define IDC_CHECK_AUTO_UPDATE_DICT      1075
+#define IDC_CHECK_SHOW_TYPING_NOTIFICATION 1076
+#define IDC_CHECK_REMEMBER_WINDOW_POS   1077
+
 // Next default values for new objects
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        158
+#define _APS_NEXT_RESOURCE_VALUE        159
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         1075
+#define _APS_NEXT_CONTROL_VALUE         1083
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

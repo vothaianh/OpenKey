@@ -50,6 +50,14 @@ private:
 	void onAddAppButton();
 	void onAddManualButton();
 	bool isAppExcluded(const string& appName);
+	
+	// App picker methods
+	vector<string> getRecentApps();
+	vector<string> searchApps(const string& searchTerm);
+	HICON extractAppIcon(const string& appName);
+	wstring findAppPath(const string& appName);
+	wstring getProductName(const string& appName);
+	static INT_PTR CALLBACK appPickerDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 protected:
 	INT_PTR eventProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
 	static INT_PTR CALLBACK tabPageEventProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);

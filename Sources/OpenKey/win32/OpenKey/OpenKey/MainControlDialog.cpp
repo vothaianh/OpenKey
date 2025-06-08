@@ -16,9 +16,15 @@ redistribute your new version, it MUST be open source.
 #include <Shlobj.h>
 #include <Uxtheme.h>
 #include <Commdlg.h>
+#include <algorithm>
+#include <Shellapi.h>
+#include <Commctrl.h>
 
 #pragma comment(lib, "UxTheme.lib")
 #pragma comment(lib, "Comdlg32.lib")
+#pragma comment(lib, "Shell32.lib")
+#pragma comment(lib, "Comctl32.lib")
+#pragma comment(lib, "Version.lib")
 
 static Uint16 _lastKeyCode;
 
@@ -702,11 +708,11 @@ void MainControlDialog::initExclusionTab() {
     // Setup list view columns
     LVCOLUMN lvc = { 0 };
     lvc.mask = LVCF_TEXT | LVCF_WIDTH;
-    lvc.cx = 150;
+    lvc.cx = 208;  // 50% of ListView width (416px / 2 = 208px each column)
     lvc.pszText = (LPWSTR)_T("Tên ứng dụng");
     ListView_InsertColumn(listExcludedApps, 0, &lvc);
     
-    lvc.cx = 180;
+    lvc.cx = 208;  // 50% of ListView width (416px / 2 = 208px each column)
     lvc.pszText = (LPWSTR)_T("Tên file exe");
     ListView_InsertColumn(listExcludedApps, 1, &lvc);
     
@@ -717,9 +723,16 @@ void MainControlDialog::initExclusionTab() {
 void MainControlDialog::loadExcludedApps() {
     ListView_DeleteAllItems(listExcludedApps);
     
+    // Store wstrings to keep them alive during ListView operations
+    static vector<wstring> displayNames;
+    static vector<wstring> exeNames;
+    displayNames.clear();
+    exeNames.clear();
+    
     for (size_t i = 0; i < vExcludedApps.size(); i++) {
         const string& app = vExcludedApps[i];
         wstring wApp = utf8ToWideString(app);
+        exeNames.push_back(wApp);
         
         LVITEM lvi = { 0 };
         lvi.mask = LVIF_TEXT;
@@ -728,19 +741,19 @@ void MainControlDialog::loadExcludedApps() {
         
         // Check if it's a wildcard pattern
         if (app.find(".*") != string::npos) {
-            lvi.pszText = (LPWSTR)wApp.c_str();
+            displayNames.push_back(wApp);
+            lvi.pszText = (LPWSTR)displayNames[i].c_str();
         } else {
-            // Extract app name from exe name
-            size_t dotPos = app.find_last_of('.');
-            string appName = (dotPos != string::npos) ? app.substr(0, dotPos) : app;
-            wstring wAppName = utf8ToWideString(appName);
-            lvi.pszText = (LPWSTR)wAppName.c_str();
+            // Get product name (commercial name) instead of exe name
+            wstring productName = getProductName(app);
+            displayNames.push_back(productName);
+            lvi.pszText = (LPWSTR)displayNames[i].c_str();
         }
         
         int index = ListView_InsertItem(listExcludedApps, &lvi);
         
         // Set exe name in second column
-        ListView_SetItemText(listExcludedApps, index, 1, (LPWSTR)wApp.c_str());
+        ListView_SetItemText(listExcludedApps, index, 1, (LPWSTR)exeNames[i].c_str());
     }
 }
 
@@ -792,28 +805,12 @@ void MainControlDialog::removeSelectedApp() {
 }
 
 void MainControlDialog::onAddAppButton() {
-    OPENFILENAME ofn = { 0 };
-    WCHAR szFile[MAX_PATH] = { 0 };
-    
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = hDlg;
-    ofn.lpstrFile = szFile;
-    ofn.nMaxFile = sizeof(szFile);
-    ofn.lpstrFilter = _T("Executable Files\0*.exe\0All Files\0*.*\0");
-    ofn.nFilterIndex = 1;
-    ofn.lpstrFileTitle = NULL;
-    ofn.nMaxFileTitle = 0;
-    ofn.lpstrInitialDir = NULL;
-    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
-    
-    if (GetOpenFileName(&ofn)) {
-        // Extract just the filename
-        wstring fullPath(szFile);
-        size_t lastSlash = fullPath.find_last_of(L"\\");
-        wstring fileName = (lastSlash != wstring::npos) ? fullPath.substr(lastSlash + 1) : fullPath;
-        
-        string appName = wideStringToUtf8(fileName);
-        addAppToExclusion(appName);
+    if (IDOK == DialogBoxParam(GetModuleHandle(NULL), 
+        MAKEINTRESOURCE(IDD_DIALOG_APP_PICKER),
+        hDlg, 
+        appPickerDialogProc,
+        (LPARAM)this)) {
+        // App was selected and added in the dialog
     }
 }
 
@@ -872,4 +869,557 @@ bool MainControlDialog::isAppExcluded(const string& appName) {
         }
     }
     return false;
+}
+
+vector<string> MainControlDialog::getRecentApps() {
+    vector<string> allApps;
+    
+    // Get all running processes first
+    DWORD processes[2048], cbNeeded, processCount;
+    if (EnumProcesses(processes, sizeof(processes), &cbNeeded)) {
+        processCount = cbNeeded / sizeof(DWORD);
+        
+        for (DWORD i = 0; i < processCount; i++) {
+            if (processes[i] != 0) {
+                HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processes[i]);
+                if (hProcess) {
+                    WCHAR processName[MAX_PATH];
+                    if (GetModuleBaseName(hProcess, NULL, processName, sizeof(processName)/sizeof(WCHAR))) {
+                        string appName = wideStringToUtf8(processName);
+                        
+                        // Skip system processes
+                        if (appName != "System" && appName != "Registry" && 
+                            appName != "smss.exe" && appName != "csrss.exe" &&
+                            appName != "wininit.exe" && appName != "winlogon.exe" &&
+                            appName != "services.exe" && appName != "lsass.exe" &&
+                            appName != "svchost.exe" && appName != "dwm.exe" &&
+                            appName != "ntoskrnl.exe" && appName != "audiodg.exe" &&
+                            appName != "conhost.exe" && appName != "dllhost.exe") {
+                            
+                            // Check if not already in list
+                            if (find(allApps.begin(), allApps.end(), appName) == allApps.end()) {
+                                allApps.push_back(appName);
+                            }
+                        }
+                    }
+                    CloseHandle(hProcess);
+                }
+            }
+        }
+    }
+    
+    // Scan common application directories for installed apps
+    vector<wstring> appDirs = {
+        L"C:\\Program Files\\",
+        L"C:\\Program Files (x86)\\",
+    };
+    
+    for (const wstring& dir : appDirs) {
+        WIN32_FIND_DATA findData;
+        wstring searchPath = dir + L"*.exe";
+        HANDLE hFind = FindFirstFile(searchPath.c_str(), &findData);
+        
+        if (hFind != INVALID_HANDLE_VALUE) {
+            do {
+                if (!(findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+                    string appName = wideStringToUtf8(findData.cFileName);
+                    
+                    // Skip system files and duplicates
+                    if (appName != "setup.exe" && appName != "uninstall.exe" &&
+                        appName != "install.exe" && appName != "update.exe" &&
+                        find(allApps.begin(), allApps.end(), appName) == allApps.end()) {
+                        allApps.push_back(appName);
+                    }
+                }
+            } while (FindNextFile(hFind, &findData));
+            FindClose(hFind);
+        }
+        
+        // Also scan subdirectories (one level deep)
+        wstring subSearchPath = dir + L"*";
+        hFind = FindFirstFile(subSearchPath.c_str(), &findData);
+        
+        if (hFind != INVALID_HANDLE_VALUE) {
+            do {
+                if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
+                    wcscmp(findData.cFileName, L".") != 0 &&
+                    wcscmp(findData.cFileName, L"..") != 0) {
+                    
+                    wstring subDir = dir + findData.cFileName + L"\\*.exe";
+                    WIN32_FIND_DATA subFindData;
+                    HANDLE hSubFind = FindFirstFile(subDir.c_str(), &subFindData);
+                    
+                    if (hSubFind != INVALID_HANDLE_VALUE) {
+                        do {
+                            if (!(subFindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+                                string appName = wideStringToUtf8(subFindData.cFileName);
+                                
+                                if (appName != "setup.exe" && appName != "uninstall.exe" &&
+                                    appName != "install.exe" && appName != "update.exe" &&
+                                    find(allApps.begin(), allApps.end(), appName) == allApps.end()) {
+                                    allApps.push_back(appName);
+                                }
+                            }
+                        } while (FindNextFile(hSubFind, &subFindData));
+                        FindClose(hSubFind);
+                    }
+                }
+            } while (FindNextFile(hFind, &findData));
+            FindClose(hFind);
+        }
+    }
+    
+    // Add some common applications that might be missed
+    vector<string> commonApps = {
+        "notepad.exe", "calc.exe", "mspaint.exe", "wordpad.exe",
+        "chrome.exe", "firefox.exe", "msedge.exe", "iexplore.exe",
+        "winword.exe", "excel.exe", "powerpnt.exe", "outlook.exe",
+        "cmd.exe", "powershell.exe", "powershell_ise.exe", "wt.exe",
+        "code.exe", "devenv.exe", "notepad++.exe", "sublime_text.exe",
+        "discord.exe", "slack.exe", "teams.exe", "zoom.exe",
+        "vlc.exe", "wmplayer.exe", "spotify.exe", "itunes.exe",
+        "explorer.exe", "taskmgr.exe", "regedit.exe", "msconfig.exe",
+        "mstsc.exe", "winver.exe", "control.exe", "appwiz.cpl"
+    };
+    
+    for (const string& app : commonApps) {
+        if (find(allApps.begin(), allApps.end(), app) == allApps.end()) {
+            allApps.push_back(app);
+        }
+    }
+    
+    // Sort alphabetically for better user experience
+    sort(allApps.begin(), allApps.end());
+    
+    return allApps;
+}
+
+vector<string> MainControlDialog::searchApps(const string& searchTerm) {
+    vector<string> results;
+    vector<string> allApps = getRecentApps();
+    
+    if (searchTerm.empty()) {
+        return allApps;
+    }
+    
+    string lowerSearchTerm = searchTerm;
+    transform(lowerSearchTerm.begin(), lowerSearchTerm.end(), lowerSearchTerm.begin(), ::tolower);
+    
+    for (const string& app : allApps) {
+        // Search in exe filename
+        string lowerApp = app;
+        transform(lowerApp.begin(), lowerApp.end(), lowerApp.begin(), ::tolower);
+        
+        bool found = false;
+        if (lowerApp.find(lowerSearchTerm) != string::npos) {
+            found = true;
+        }
+        
+        // Also search in product name (commercial name)
+        if (!found) {
+            wstring productName = getProductName(app);
+            string productNameStr = wideStringToUtf8(productName);
+            string lowerProductName = productNameStr;
+            transform(lowerProductName.begin(), lowerProductName.end(), lowerProductName.begin(), ::tolower);
+            
+            if (lowerProductName.find(lowerSearchTerm) != string::npos) {
+                found = true;
+            }
+        }
+        
+        if (found) {
+            results.push_back(app);
+        }
+    }
+    
+    return results;
+}
+
+wstring MainControlDialog::findAppPath(const string& appName) {
+    wstring wAppName = utf8ToWideString(appName);
+    
+    // Search in common directories
+    vector<wstring> searchDirs = {
+        L"C:\\Program Files\\",
+        L"C:\\Program Files (x86)\\",
+        L"C:\\Windows\\System32\\",
+        L"C:\\Windows\\SysWOW64\\",
+        L"C:\\Windows\\",
+        L"C:\\Users\\Public\\Desktop\\",
+        L"C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\"
+    };
+    
+    for (const wstring& dir : searchDirs) {
+        // Direct path
+        wstring directPath = dir + wAppName;
+        if (GetFileAttributes(directPath.c_str()) != INVALID_FILE_ATTRIBUTES) {
+            return directPath;
+        }
+        
+        // For System32 and SysWOW64, don't search subdirectories (too many files)
+        if (dir.find(L"System32") != wstring::npos || dir.find(L"SysWOW64") != wstring::npos || dir.find(L"Windows\\") != wstring::npos) {
+            continue;
+        }
+        
+        // Search in subdirectories for other directories
+        WIN32_FIND_DATA findData;
+        wstring searchPath = dir + L"*";
+        HANDLE hFind = FindFirstFile(searchPath.c_str(), &findData);
+        
+        if (hFind != INVALID_HANDLE_VALUE) {
+            do {
+                if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
+                    wcscmp(findData.cFileName, L".") != 0 &&
+                    wcscmp(findData.cFileName, L"..") != 0) {
+                    
+                    wstring subPath = dir + findData.cFileName + L"\\" + wAppName;
+                    if (GetFileAttributes(subPath.c_str()) != INVALID_FILE_ATTRIBUTES) {
+                        FindClose(hFind);
+                        return subPath;
+                    }
+                }
+            } while (FindNextFile(hFind, &findData));
+            FindClose(hFind);
+        }
+    }
+    
+    // Special handling for Visual Studio and other IDEs
+    if (appName == "devenv.exe") {
+        // Common Visual Studio installation paths
+        vector<wstring> vsPaths = {
+            L"C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\devenv.exe",
+            L"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\Common7\\IDE\\devenv.exe",
+            L"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\devenv.exe",
+            L"C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Enterprise\\Common7\\IDE\\devenv.exe",
+            L"C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Professional\\Common7\\IDE\\devenv.exe",
+            L"C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\Common7\\IDE\\devenv.exe"
+        };
+        
+        for (const wstring& vsPath : vsPaths) {
+            if (GetFileAttributes(vsPath.c_str()) != INVALID_FILE_ATTRIBUTES) {
+                return vsPath;
+            }
+        }
+    }
+    
+    // Try to find in PATH environment variable
+    WCHAR pathBuffer[32768];
+    DWORD pathLen = GetEnvironmentVariable(L"PATH", pathBuffer, sizeof(pathBuffer)/sizeof(WCHAR));
+    if (pathLen > 0 && pathLen < sizeof(pathBuffer)/sizeof(WCHAR)) {
+        wstring pathEnv(pathBuffer);
+        size_t start = 0;
+        size_t end = pathEnv.find(L';');
+        
+        while (end != wstring::npos) {
+            wstring pathDir = pathEnv.substr(start, end - start);
+            if (!pathDir.empty() && pathDir.back() != L'\\') {
+                pathDir += L'\\';
+            }
+            
+            wstring fullPath = pathDir + wAppName;
+            if (GetFileAttributes(fullPath.c_str()) != INVALID_FILE_ATTRIBUTES) {
+                return fullPath;
+            }
+            
+            start = end + 1;
+            end = pathEnv.find(L';', start);
+        }
+        
+        // Check last path
+        if (start < pathEnv.length()) {
+            wstring pathDir = pathEnv.substr(start);
+            if (!pathDir.empty() && pathDir.back() != L'\\') {
+                pathDir += L'\\';
+            }
+            
+            wstring fullPath = pathDir + wAppName;
+            if (GetFileAttributes(fullPath.c_str()) != INVALID_FILE_ATTRIBUTES) {
+                return fullPath;
+            }
+        }
+    }
+    
+    return L"";
+}
+
+HICON MainControlDialog::extractAppIcon(const string& appName) {
+    wstring appPath = findAppPath(appName);
+    
+    if (appPath.empty()) {
+        // Return default application icon
+        return LoadIcon(NULL, IDI_APPLICATION);
+    }
+    
+    // Extract icon from exe file
+    HICON hIcon = NULL;
+    
+    // Try to extract medium-sized icon first
+    SHFILEINFO sfi = { 0 };
+    SHGetFileInfo(appPath.c_str(), 0, &sfi, sizeof(sfi), SHGFI_ICON);
+    hIcon = sfi.hIcon;
+    
+    if (!hIcon) {
+        // Try to extract large icon
+        ExtractIconEx(appPath.c_str(), 0, &hIcon, NULL, 1);
+    }
+    
+    if (!hIcon) {
+        // Try to extract small icon as fallback
+        ExtractIconEx(appPath.c_str(), 0, NULL, &hIcon, 1);
+    }
+    
+    if (!hIcon) {
+        // Return default application icon as fallback
+        hIcon = LoadIcon(NULL, IDI_APPLICATION);
+    }
+    
+    return hIcon;
+}
+
+wstring MainControlDialog::getProductName(const string& appName) {
+    wstring appPath = findAppPath(appName);
+    
+    if (appPath.empty()) {
+        // Fallback to exe name without extension
+        size_t dotPos = appName.find_last_of('.');
+        string baseName = (dotPos != string::npos) ? appName.substr(0, dotPos) : appName;
+        return utf8ToWideString(baseName);
+    }
+    
+    // Get version info size
+    DWORD dwSize = GetFileVersionInfoSize(appPath.c_str(), NULL);
+    if (dwSize == 0) {
+        // Fallback to exe name without extension
+        size_t dotPos = appName.find_last_of('.');
+        string baseName = (dotPos != string::npos) ? appName.substr(0, dotPos) : appName;
+        return utf8ToWideString(baseName);
+    }
+    
+    // Allocate buffer for version info
+    vector<BYTE> versionInfo(dwSize);
+    if (!GetFileVersionInfo(appPath.c_str(), 0, dwSize, versionInfo.data())) {
+        // Fallback to exe name without extension
+        size_t dotPos = appName.find_last_of('.');
+        string baseName = (dotPos != string::npos) ? appName.substr(0, dotPos) : appName;
+        return utf8ToWideString(baseName);
+    }
+    
+    // Try to get ProductName first
+    LPWSTR productName = nullptr;
+    UINT productNameLen = 0;
+    if (VerQueryValue(versionInfo.data(), L"\\StringFileInfo\\040904B0\\ProductName", 
+                      (LPVOID*)&productName, &productNameLen) && productName && productNameLen > 1) {
+        return wstring(productName);
+    }
+    
+    // Try alternative language code
+    if (VerQueryValue(versionInfo.data(), L"\\StringFileInfo\\000004B0\\ProductName", 
+                      (LPVOID*)&productName, &productNameLen) && productName && productNameLen > 1) {
+        return wstring(productName);
+    }
+    
+    // Try FileDescription as fallback
+    LPWSTR fileDescription = nullptr;
+    UINT fileDescLen = 0;
+    if (VerQueryValue(versionInfo.data(), L"\\StringFileInfo\\040904B0\\FileDescription", 
+                      (LPVOID*)&fileDescription, &fileDescLen) && fileDescription && fileDescLen > 1) {
+        return wstring(fileDescription);
+    }
+    
+    // Try alternative language code for FileDescription
+    if (VerQueryValue(versionInfo.data(), L"\\StringFileInfo\\000004B0\\FileDescription", 
+                      (LPVOID*)&fileDescription, &fileDescLen) && fileDescription && fileDescLen > 1) {
+        return wstring(fileDescription);
+    }
+    
+    // Final fallback to exe name without extension
+    size_t dotPos = appName.find_last_of('.');
+    string baseName = (dotPos != string::npos) ? appName.substr(0, dotPos) : appName;
+    return utf8ToWideString(baseName);
+}
+
+INT_PTR CALLBACK MainControlDialog::appPickerDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
+    static MainControlDialog* pThis = nullptr;
+    static HWND hListView = nullptr;
+    static HWND hSearchEdit = nullptr;
+    static HIMAGELIST hImageList = nullptr;
+    
+    switch (message) {
+    case WM_INITDIALOG: {
+        pThis = (MainControlDialog*)lParam;
+        hListView = GetDlgItem(hDlg, IDC_LIST_RECENT_APPS);
+        hSearchEdit = GetDlgItem(hDlg, IDC_EDIT_SEARCH);
+        
+        // Create image list for icons (larger size)
+        hImageList = ImageList_Create(32, 32, ILC_COLOR32 | ILC_MASK, 0, 100);
+        ListView_SetImageList(hListView, hImageList, LVSIL_SMALL);
+        
+        // Setup list view columns
+        LVCOLUMN lvc = { 0 };
+        lvc.mask = LVCF_TEXT | LVCF_WIDTH;
+        lvc.cx = 189;  // 50% of ListView width (378px / 2 = 189px each column)
+        lvc.pszText = (LPWSTR)_T("Tên ứng dụng");
+        ListView_InsertColumn(hListView, 0, &lvc);
+        
+        lvc.cx = 189;  // 50% of ListView width (378px / 2 = 189px each column)
+        lvc.pszText = (LPWSTR)_T("Tên file exe");
+        ListView_InsertColumn(hListView, 1, &lvc);
+        
+        // Set full row select and increase row height
+        ListView_SetExtendedListViewStyle(hListView, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
+        
+        // Set item height to accommodate larger icons
+        HIMAGELIST hTempImageList = ImageList_Create(1, 36, ILC_COLOR, 1, 1);
+        ListView_SetImageList(hListView, hTempImageList, LVSIL_STATE);
+        ImageList_Destroy(hTempImageList);
+        
+        // Load all system apps
+        if (pThis) {
+            vector<string> recentApps = pThis->getRecentApps();
+            for (size_t i = 0; i < recentApps.size(); i++) {
+                const string& app = recentApps[i];
+                wstring wApp = utf8ToWideString(app);
+                
+                // Extract icon and add to image list
+                HICON hIcon = pThis->extractAppIcon(app);
+                int iconIndex = ImageList_AddIcon(hImageList, hIcon);
+                if (hIcon && hIcon != LoadIcon(NULL, IDI_APPLICATION)) {
+                    DestroyIcon(hIcon);
+                }
+                
+                LVITEM lvi = { 0 };
+                lvi.mask = LVIF_TEXT | LVIF_IMAGE;
+                lvi.iItem = (int)i;
+                lvi.iSubItem = 0;
+                lvi.iImage = iconIndex;
+                
+                // Get product name (commercial name) instead of exe name
+                wstring productName = pThis->getProductName(app);
+                lvi.pszText = (LPWSTR)productName.c_str();
+                
+                int index = ListView_InsertItem(hListView, &lvi);
+                ListView_SetItemText(hListView, index, 1, (LPWSTR)wApp.c_str());
+            }
+        }
+        
+        SetFocus(hSearchEdit);
+        return TRUE;
+    }
+        
+    case WM_COMMAND:
+        switch (LOWORD(wParam)) {
+        case IDOK: {
+            int selectedIndex = ListView_GetNextItem(hListView, -1, LVNI_SELECTED);
+            if (selectedIndex >= 0) {
+                WCHAR appName[256];
+                ListView_GetItemText(hListView, selectedIndex, 1, appName, 256);
+                string appNameStr = wideStringToUtf8(appName);
+                
+                if (pThis) {
+                    pThis->addAppToExclusion(appNameStr);
+                }
+                EndDialog(hDlg, IDOK);
+            } else {
+                MessageBox(hDlg, _T("Vui lòng chọn một ứng dụng từ danh sách."), _T("OpenKey"), MB_OK | MB_ICONWARNING);
+            }
+            return TRUE;
+        }
+        case IDCANCEL:
+            EndDialog(hDlg, IDCANCEL);
+            return TRUE;
+            
+        case IDC_BUTTON_BROWSE: {
+            OPENFILENAME ofn = { 0 };
+            WCHAR szFile[MAX_PATH] = { 0 };
+            
+            ofn.lStructSize = sizeof(ofn);
+            ofn.hwndOwner = hDlg;
+            ofn.lpstrFile = szFile;
+            ofn.nMaxFile = sizeof(szFile);
+            ofn.lpstrFilter = _T("Executable Files\0*.exe\0All Files\0*.*\0");
+            ofn.nFilterIndex = 1;
+            ofn.lpstrFileTitle = NULL;
+            ofn.nMaxFileTitle = 0;
+            ofn.lpstrInitialDir = NULL;
+            ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+            
+            if (GetOpenFileName(&ofn)) {
+                // Extract just the filename
+                wstring fullPath(szFile);
+                size_t lastSlash = fullPath.find_last_of(L"\\");
+                wstring fileName = (lastSlash != wstring::npos) ? fullPath.substr(lastSlash + 1) : fullPath;
+                
+                string appName = wideStringToUtf8(fileName);
+                if (pThis) {
+                    pThis->addAppToExclusion(appName);
+                }
+                EndDialog(hDlg, IDOK);
+            }
+            return TRUE;
+        }
+        case IDC_EDIT_SEARCH:
+            if (HIWORD(wParam) == EN_CHANGE) {
+                WCHAR searchText[256];
+                GetDlgItemText(hDlg, IDC_EDIT_SEARCH, searchText, 256);
+                string searchTerm = wideStringToUtf8(searchText);
+                
+                // Clear list and repopulate with search results
+                ListView_DeleteAllItems(hListView);
+                
+                // Clear and recreate image list for search results
+                if (hImageList) {
+                    ImageList_RemoveAll(hImageList);
+                }
+                
+                if (pThis) {
+                    vector<string> searchResults = pThis->searchApps(searchTerm);
+                    for (size_t i = 0; i < searchResults.size(); i++) {
+                        const string& app = searchResults[i];
+                        wstring wApp = utf8ToWideString(app);
+                        
+                        // Extract icon and add to image list
+                        HICON hIcon = pThis->extractAppIcon(app);
+                        int iconIndex = ImageList_AddIcon(hImageList, hIcon);
+                        if (hIcon && hIcon != LoadIcon(NULL, IDI_APPLICATION)) {
+                            DestroyIcon(hIcon);
+                        }
+                        
+                        LVITEM lvi = { 0 };
+                        lvi.mask = LVIF_TEXT | LVIF_IMAGE;
+                        lvi.iItem = (int)i;
+                        lvi.iSubItem = 0;
+                        lvi.iImage = iconIndex;
+                        
+                        // Get product name (commercial name) instead of exe name
+                        wstring productName = pThis->getProductName(app);
+                        lvi.pszText = (LPWSTR)productName.c_str();
+                        
+                        int index = ListView_InsertItem(hListView, &lvi);
+                        ListView_SetItemText(hListView, index, 1, (LPWSTR)wApp.c_str());
+                    }
+                }
+            }
+            return TRUE;
+        }
+        break;
+        
+    case WM_NOTIFY: {
+        LPNMHDR pnmh = (LPNMHDR)lParam;
+        if (pnmh->idFrom == IDC_LIST_RECENT_APPS && pnmh->code == NM_DBLCLK) {
+            // Double click to select
+            SendMessage(hDlg, WM_COMMAND, IDOK, 0);
+            return TRUE;
+        }
+        break;
+    }
+    
+    case WM_DESTROY:
+        // Cleanup image list
+        if (hImageList) {
+            ImageList_Destroy(hImageList);
+            hImageList = nullptr;
+        }
+        break;
+    }
+    return FALSE;
 }
