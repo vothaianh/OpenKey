@@ -29,7 +29,7 @@
 }
 
 - (IBAction)onHomePage:(id)sender {
-    [[NSWorkspace sharedWorkspace] openURL: [NSURL URLWithString:@"https://github.com/tuyenvm/OpenKey"]];
+    [[NSWorkspace sharedWorkspace] openURL: [NSURL URLWithString:@"https://github.com/vothaianh/OpenKey"]];
 }
 
 - (IBAction)onFanPage:(id)sender {
@@ -37,7 +37,7 @@
 }
 
 - (IBAction)onLatestReleaseVersion:(id)sender {
-    [[NSWorkspace sharedWorkspace] openURL: [NSURL URLWithString:@"https://github.com/tuyenvm/OpenKey/releases"]];
+    [[NSWorkspace sharedWorkspace] openURL: [NSURL URLWithString:@"https://github.com/vothaianh/OpenKey/releases"]];
 }
 
 - (IBAction)onCheckUpdateOnStartup:(NSButton *)sender {

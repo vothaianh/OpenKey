@@ -197,6 +197,35 @@ extern "C" {
         return isSpotlightVisible() || [_recommendWorkaroundDisabledApp containsObject:topApp];
     }
     
+    BOOL isAppExcluded(NSString* bundleIdentifier) {
+        if (bundleIdentifier == nil) return false;
+        
+        // Check if exclusion is enabled
+        NSInteger exclusionEnabled = [[NSUserDefaults standardUserDefaults] integerForKey:@"ExclusionEnabled"];
+        if (!exclusionEnabled) return false;
+        
+        // Get excluded apps list
+        NSArray *excludedApps = [[NSUserDefaults standardUserDefaults] arrayForKey:@"ExcludedApps"];
+        if (!excludedApps) return false;
+        
+        // Check if current app is in the exclusion list
+        for (NSString *excludedApp in excludedApps) {
+            // Check for exact match first
+            if ([bundleIdentifier isEqualToString:excludedApp]) {
+                return true;
+            }
+            
+            // Check for wildcard pattern (ending with .*)
+            if ([excludedApp hasSuffix:@".*"]) {
+                NSString *prefix = [excludedApp substringToIndex:excludedApp.length - 2];
+                if ([bundleIdentifier hasPrefix:prefix]) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    
     void saveSmartSwitchKeyData() {
         getSmartSwitchKeySaveData(savedSmartSwitchKeyData);
         NSData* _data = [NSData dataWithBytes:savedSmartSwitchKeyData.data() length:savedSmartSwitchKeyData.size()];
@@ -601,6 +630,11 @@ extern "C" {
     CGEventRef OpenKeyCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *refcon) {
         //dont handle my event
         if (CGEventGetIntegerValueField(event, kCGEventSourceStateID) == CGEventSourceGetSourceStateID(myEventSource)) {
+            return event;
+        }
+        
+        // Check if current app is excluded from Telex processing
+        if (isAppExcluded(FRONT_APP)) {
             return event;
         }
         

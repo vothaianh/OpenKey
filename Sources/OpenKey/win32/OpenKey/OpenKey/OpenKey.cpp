@@ -111,6 +111,23 @@ void OpenKeyInit() {
 	APP_GET_DATA(vTempOffOpenKey, 0);
 	APP_GET_DATA(vFixChromiumBrowser, 0);
 
+	// Load exclusion data
+	APP_GET_DATA(vExclusionEnabled, 0);
+	vExcludedApps.clear();
+	DWORD excludedAppsSize;
+	BYTE* excludedAppsData = OpenKeyHelper::getRegBinary(_T("ExcludedApps"), excludedAppsSize);
+	if (excludedAppsData && excludedAppsSize > 0) {
+		char* data = (char*)excludedAppsData;
+		size_t offset = 0;
+		while (offset < excludedAppsSize) {
+			string app(data + offset);
+			if (!app.empty()) {
+				vExcludedApps.push_back(app);
+			}
+			offset += app.length() + 1;
+		}
+	}
+
 	//init convert tool
 	APP_GET_DATA(convertToolDontAlertWhenCompleted, 0);
 	APP_GET_DATA(convertToolToAllCaps, 0);
@@ -172,6 +189,28 @@ void OpenKeyInit() {
 void saveSmartSwitchKeyData() {
 	getSmartSwitchKeySaveData(savedSmartSwitchKeyData);
 	OpenKeyHelper::setRegBinary(_T("smartSwitchKey"), savedSmartSwitchKeyData.data(), (int)savedSmartSwitchKeyData.size());
+}
+
+static bool isCurrentAppExcluded() {
+	if (!vExclusionEnabled) return false;
+	
+	string& currentApp = OpenKeyHelper::getFrontMostAppExecuteName();
+	
+	for (const string& excluded : vExcludedApps) {
+		// Check for wildcard patterns
+		if (excluded.find(".*") != string::npos) {
+			string prefix = excluded.substr(0, excluded.find(".*"));
+			if (currentApp.find(prefix) == 0) {
+				return true;
+			}
+		} else {
+			// Exact match
+			if (currentApp == excluded) {
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 static void InsertKeyLength(const Uint8& len) {
@@ -574,6 +613,11 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 				return NULL;
 			}
 		}
+		return CallNextHookEx(hKeyboardHook, nCode, wParam, lParam);
+	}
+
+	// Check if current app is excluded
+	if (isCurrentAppExcluded()) {
 		return CallNextHookEx(hKeyboardHook, nCode, wParam, lParam);
 	}
 

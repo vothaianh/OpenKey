@@ -52,6 +52,10 @@ int vCheckNewVersion = 0;
 //beta feature
 int vFixChromiumBrowser = 0; //new on version 2.0
 
+// Exclusion feature variables
+int vExclusionEnabled = 0;
+vector<string> vExcludedApps;
+
 bool AppDelegate::isDialogMsg(MSG & msg) const {
 	return (mainDialog != NULL && IsDialogMessage(mainDialog->getHwnd(), &msg)) ||
 		(macroDialog != NULL && IsDialogMessage(macroDialog->getHwnd(), &msg)) || 
@@ -197,6 +201,11 @@ void AppDelegate::onDefaultConfig() {
 	APP_SET_DATA(vOtherLanguage, 1);
 	APP_SET_DATA(vTempOffOpenKey, 0);
 	APP_SET_DATA(vFixChromiumBrowser, 0);
+
+	// Reset exclusion settings
+	APP_SET_DATA(vExclusionEnabled, 0);
+	vExcludedApps.clear();
+	OpenKeyHelper::setRegBinary(_T("ExcludedApps"), nullptr, 0);
 
 	if (mainDialog) {
 		mainDialog->fillData();

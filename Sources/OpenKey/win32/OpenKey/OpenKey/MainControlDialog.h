@@ -16,7 +16,7 @@ redistribute your new version, it MUST be open source.
 
 class MainControlDialog : public BaseDialog {
 private:
-	HWND hTab, hTabPage1, hTabPage2, hTabPage3, hTabPage4;
+	HWND hTab, hTabPage1, hTabPage2, hTabPage3, hTabPage4, hTabPage5;
 	HWND comboBoxInputType;
 	HWND comboBoxTableCode;
 	HWND checkCtrl, checkAlt, checkWin, checkShift, textSwitchKey, checkBeep;
@@ -28,6 +28,9 @@ private:
 	HWND checkCreateDesktopShortcut, checkCheckNewVersion, checkRunAsAdmin, checkSupportMetroApp, checkMacroAutoCaps;
 	HWND checkFixChromium, checkRememberTableCode, checkTempOffOpenKey, checkAllowOtherLanguages;
 	HWND hUpdateButton;
+	
+	// Exclusion tab controls
+	HWND checkExclusionEnabled, listExcludedApps, buttonAddApp, buttonRemoveApp, buttonAddManual;
 private:
 	void initDialog();
 	void onComboBoxSelected(const HWND& hCombobox, const int& comboboxId);
@@ -37,6 +40,24 @@ private:
 	void onTabIndexChanged();
 	void onUpdateButton();
 	void requestRestartAsAdmin();
+	
+	// Exclusion methods
+	void initExclusionTab();
+	void loadExcludedApps();
+	void saveExcludedApps();
+	void addAppToExclusion(const string& appName);
+	void removeSelectedApp();
+	void onAddAppButton();
+	void onAddManualButton();
+	bool isAppExcluded(const string& appName);
+	
+	// App picker methods
+	vector<string> getRecentApps();
+	vector<string> searchApps(const string& searchTerm);
+	HICON extractAppIcon(const string& appName);
+	wstring findAppPath(const string& appName);
+	wstring getProductName(const string& appName);
+	static INT_PTR CALLBACK appPickerDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 protected:
 	INT_PTR eventProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
 	static INT_PTR CALLBACK tabPageEventProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
